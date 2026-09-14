@@ -1,0 +1,8 @@
+FROM nginx:1.27-alpine
+
+COPY index.html /usr/share/nginx/html/index.html
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD wget --spider -q http://localhost/ || exit 1

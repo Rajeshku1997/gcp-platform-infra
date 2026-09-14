@@ -10,9 +10,11 @@ pipeline {
 
         IMAGE_REPO = 'ghcr.io/rajeshku1997/devops-app'
 
+        APP_DIR = 'customer-service/'
+
         K8S_NAMESPACE = 'application'
-        DEPLOYMENT    = 'devops-app'
-        CONTAINER     = 'devops-app'
+        DEPLOYMENT = 'devops-app'
+        CONTAINER = 'devops-app'
     }
 
     stages {
@@ -20,22 +22,6 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-            }
-        }
-
-        stage('Unit Test') {
-            steps {
-                dir('application') {
-                    sh '''
-                        set -e
-
-                        python3 --version
-                        python3 -m pip --version
-
-                        python3 -m pip install --user -r requirements.txt
-                        python3 -m pytest tests/
-                    '''
-                }
             }
         }
 
@@ -55,7 +41,7 @@ pipeline {
                     sh """
                         docker build \
                           -t ${IMAGE_REPO}:${IMAGE_TAG} \
-                          ./application
+                          ${APP_DIR}
                     """
                 }
             }
@@ -85,8 +71,6 @@ pipeline {
                 ]) {
 
                     sh '''
-                        set -e
-
                         echo "$GHCR_TOKEN" | docker login ghcr.io \
                           -u "$GHCR_USER" \
                           --password-stdin
@@ -103,7 +87,6 @@ pipeline {
             steps {
 
                 sh '''
-                    set -e
 
                     gcloud container clusters get-credentials \
                       ${GKE_CLUSTER} \
@@ -113,6 +96,7 @@ pipeline {
                     kubectl set image deployment/${DEPLOYMENT} \
                       ${CONTAINER}=${IMAGE_REPO}:${IMAGE_TAG} \
                       -n ${K8S_NAMESPACE}
+
                 '''
             }
         }
@@ -121,12 +105,12 @@ pipeline {
             steps {
 
                 sh '''
-                    set -e
 
                     kubectl rollout status \
                       deployment/${DEPLOYMENT} \
                       -n ${K8S_NAMESPACE} \
                       --timeout=5m
+
                 '''
             }
         }
@@ -135,31 +119,37 @@ pipeline {
             steps {
 
                 sh '''
-                    set -e
 
-                    echo "===== DEPLOYMENT ====="
-
-                    kubectl get deployment ${DEPLOYMENT} \
-                      -n ${K8S_NAMESPACE}
-
-                    echo "===== PODS ====="
+                    echo "===== Pods ====="
 
                     kubectl get pods \
                       -n ${K8S_NAMESPACE} \
                       -o wide
 
-                    echo "===== SERVICE ====="
+                    echo "===== Service ====="
 
                     kubectl get svc \
                       -n ${K8S_NAMESPACE}
 
-                    echo "===== IMAGE ====="
+                    echo "===== Image ====="
 
                     kubectl get deployment ${DEPLOYMENT} \
                       -n ${K8S_NAMESPACE} \
                       -o jsonpath='{.spec.template.spec.containers[0].image}'
 
                     echo
+
+                    echo "===== Application Test ====="
+
+                    kubectl run curl-test \
+                      --rm \
+                      -i \
+                      --restart=Never \
+                      --image=curlimages/curl \
+                      -n ${K8S_NAMESPACE} \
+                      -- \
+                      curl -f http://devops-app/
+
                 '''
             }
         }
@@ -168,15 +158,15 @@ pipeline {
     post {
 
         success {
-            echo 'Application CI/CD pipeline completed successfully.'
+            echo 'APPLICATION CI/CD SUCCESS'
         }
 
         failure {
-            echo 'Application CI/CD pipeline failed.'
+            echo 'APPLICATION CI/CD FAILED'
         }
 
         always {
-            echo 'Pipeline execution completed.'
+            echo 'Pipeline execution completed'
         }
     }
 }
